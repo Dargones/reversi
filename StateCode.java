@@ -1,7 +1,5 @@
 package reversi;
 
-import java.util.Objects;
-
 /**
  * Created by alexanderfedchin on 9/12/18.
  */

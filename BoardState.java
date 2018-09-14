@@ -1,11 +1,18 @@
 package reversi;
 
+import weka.core.Attribute;
+import weka.core.FastVector;
+import weka.core.Instance;
+import weka.core.Instances;
+
 import java.util.*;
 
 /**
  * Created by alexanderfedchin on 8/31/18.
  */
 public class BoardState {
+
+    public static FastVector attributes = new FastVector();
 
     private static final byte MIMO = Main.MAX_IND - 1;
     // Max Ind Minus One - to speed things up
@@ -26,7 +33,7 @@ public class BoardState {
     // which the value of the array increases
     private static final byte MULTIPROCESSING_LEVEL = 40;
     // IMPORTANT: Multiprocessing level should be below the first MINIMAX level
-    private static final int REPORT_FQ = (int) Math.pow(2, 18);
+    private static final int REPORT_FQ = (int) Math.pow(2, 28);
     // frequency of the report. Report is printed then count % REPORT_FQ == 0
     private static final Transformation[] TRANSFORMS = {
             (x, y) -> new byte[]{(byte) (MIMO - x), y}, (x, y) -> new byte[]{y, x},
@@ -37,7 +44,7 @@ public class BoardState {
             (x, y) -> new byte[]{y, (byte) (MIMO - x)},
             (x, y) -> new byte[]{(byte) (MIMO - y), x}};
     private static byte[][][] ITERATORS;
-    private static long DICT_MAX_SIZE = 3000000;
+    private static long DICT_MAX_SIZE = 9000000;
 
     private static byte coincLevel = Main.MAX - 2;
     // The level from which to begin to look up the state inside the coincDict
@@ -75,6 +82,24 @@ public class BoardState {
                     ITERATORS[k][i * Main.MAX_IND + j] = TRANSFORMS[k].transform(i, j);
         }
 
+        for (String feature : new String[] {"player_1_score", "player_-1_score",
+                "player_1_fixed", "player_-1_fixed"})
+            attributes.addElement(new Attribute(feature));
+
+        for (byte i = 0; i < Main.MAX_IND; i++)
+            for (byte j = 0; j < Main.MAX_IND; j++)
+                attributes.addElement(new Attribute(i + " " + j));
+
+        for (byte i = 0; i < Main.MAX_IND; i++)
+            for (byte j = 0; j < Main.MAX_IND; j++)
+                attributes.addElement(new Attribute("f " + i + " " + j));
+
+        FastVector labels = new FastVector(3);
+        labels.addElement("white");
+        labels.addElement("dark");
+        labels.addElement("truce");
+        Attribute label = new Attribute("label", labels);
+        attributes.addElement(label);
     }
 
     private byte[][] board, fixed;
@@ -235,6 +260,88 @@ public class BoardState {
      */
     public byte analyze() {
         return analyze((byte) 0);
+    }
+
+    /**
+     * Get some states at a certain level and calculate their respective
+     * instances (create a trainign or a testing set)
+     * @param level  level at which to take the states
+     * @param count  number of states to return
+     * @param name   name of the attribute
+     * @return
+     */
+    public Instances getInstances(byte level, int count, String name) {
+        Instances instances = new Instances(name, attributes, count);
+        instances.setClassIndex(attributes.size() - 1);
+        Random random = new Random();
+        int i = 0;
+        while (i < count) {
+            if (i % 100 == 0)
+                System.out.println((count - i) + " states left");
+            int currLevel = scores[Main.WHITE] + scores[Main.DARK];
+            BoardState currState = this;
+            boolean turnFlipped = false;
+            while (currLevel < level) {
+                ArrayList<BoardState> moves = currState.getMoves(false);
+                if (moves.size() == 0) {
+                    if (turnFlipped)
+                        break;
+                    else {
+                        turnFlipped = true;
+                        currState.turn = (byte) (1 - currState.turn);
+                        continue;
+                    }
+                } else
+                    turnFlipped = false;
+                currState = moves.get(random.nextInt(moves.size()));
+                currLevel = currState.scores[Main.WHITE] +
+                        currState.scores[Main.DARK];
+            }
+            if (level != currLevel)
+                continue;
+            if (coincDict[currLevel - 1].get(currState.getCode()) != null)
+                continue;
+            Instance instance = currState.stateToInstance(true);
+            coincDict[currLevel - 1].put(currState.getCode(), (byte) instance.value(attributes.size() - 1));
+            instances.add(instance);
+            i++;
+        }
+        return instances;
+    }
+
+    /**
+     * Convert the state to a weka Instance that can be used for training or
+     * evaluation purposes
+     * @param assessLabel  if True, calculate the winner for the state
+     * @return
+     */
+    public Instance stateToInstance(boolean assessLabel) {
+        Instance instance = new weka.core.Instance(attributes.size());
+        instance.setValue((Attribute) attributes.elementAt(0), scores[turn]);
+        instance.setValue((Attribute) attributes.elementAt(1), scores[1 - turn]);
+        instance.setValue((Attribute) attributes.elementAt(2), fixedScores[turn]);
+        instance.setValue((Attribute) attributes.elementAt(3), fixedScores[1 - turn]);
+
+        for (byte i = 0; i < Main.MAX_IND; i++)
+            for (byte j = 0; j < Main.MAX_IND; j++) {
+                int value = (board[i][j] == turn) ? 1 : ((board[i][j] == 1 - turn) ? -1 : 0);
+                instance.setValue((Attribute) attributes.elementAt(4 + i * Main.MAX_IND + j), value);
+            }
+
+        for (byte i = 0; i < Main.MAX_IND; i++)
+            for (byte j = 0; j < Main.MAX_IND; j++) {
+                int value = (fixed[i][j] == turn) ? 1 : ((fixed[i][j] == 1 - turn) ? -1 : 0);
+                instance.setValue((Attribute) attributes.elementAt(4 + Main.MAX + i * Main.MAX_IND + j), value);
+            }
+
+        if (assessLabel) {
+            int value = analyze();
+            value = ((Attribute) attributes.elementAt(attributes.size() - 1)).indexOfValue((value == Main.WHITE) ? "white": (
+                    (value == Main.DARK) ? "dark": "truce"));
+            instance.setValue((Attribute) attributes.elementAt(attributes.size() - 1), value);
+        }
+
+        return instance;
     }
 
     /**
