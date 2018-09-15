@@ -130,7 +130,7 @@ public class Main {
             Thread.sleep(20000);
         } catch (InterruptedException e) {
             e.printStackTrace();
-        }* /
+        }*/
     }
 
     private static String getDuration(long milisec) {
