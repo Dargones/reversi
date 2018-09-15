@@ -1,5 +1,6 @@
 package reversi;
 
+import weka.classifiers.Classifier;
 import weka.core.Attribute;
 import weka.core.FastVector;
 import weka.core.Instance;
@@ -12,6 +13,8 @@ import java.util.*;
  */
 public class BoardState {
 
+    public final static boolean USE_MINIMAX_FOR_PREDICTING = true;
+
     public static FastVector attributes = new FastVector();
 
     private static final byte MIMO = Main.MAX_IND - 1;
@@ -22,18 +25,19 @@ public class BoardState {
     private static final byte TRACE_LEVEL = 15; //The level from which to begin
     // to trace the states of the board and print them. Level is the number of
     // disks already on the board
-    private static final byte MINIMAX_LEVELS_TO_STORE = 6;
+    private static final byte MINIMAX_LEVELS_TO_STORE = 7;
     // number of minimax level calculations that should be kept intact (these
     // will not be recalculated but will take up space)
-    private static final byte[] MINIMAX = {0, 0, 0, 14, 0, 0, 0, 0, 0, 14, 0, 0,
+    private static final byte[] MINIMAX = {0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0};
+            0, 0};
     // Levels at which to use minimax and how deep the minimax calculations
     // should dive. Note that the actual calculations are made at the levels at
     // which the value of the array increases
+    public static Classifier[] MINIMAX_CLASS = new Classifier[Main.MAX];
     private static final byte MULTIPROCESSING_LEVEL = 40;
     // IMPORTANT: Multiprocessing level should be below the first MINIMAX level
-    private static final int REPORT_FQ = (int) Math.pow(2, 28);
+    private static final int REPORT_FQ = (int) Math.pow(2, 20);
     // frequency of the report. Report is printed then count % REPORT_FQ == 0
     private static final Transformation[] TRANSFORMS = {
             (x, y) -> new byte[]{(byte) (MIMO - x), y}, (x, y) -> new byte[]{y, x},
@@ -44,7 +48,8 @@ public class BoardState {
             (x, y) -> new byte[]{y, (byte) (MIMO - x)},
             (x, y) -> new byte[]{(byte) (MIMO - y), x}};
     private static byte[][][] ITERATORS;
-    private static long DICT_MAX_SIZE = 9000000;
+    private static final long DICT_MAX_SIZE = 9000000;
+    private static final int MAX_MINIMAX_INSTANCES = 10000;
 
     private static byte coincLevel = Main.MAX - 2;
     // The level from which to begin to look up the state inside the coincDict
@@ -63,8 +68,10 @@ public class BoardState {
     private static boolean terminateThreads = false; // True, only if a thread
     // has found a winning solution and all other threads should be terminated
     private static int reportsPrinted = 0; // Number of reports printed
+    private static Instances currMinimax = new Instances("currMinimax", attributes, MAX_MINIMAX_INSTANCES);
 
     static {
+        currMinimax.setClassIndex(attributes.size() - 1);
         // Modifying the MINIMAX array
         for (byte i = 1; i < MINIMAX.length; i++)
             if ((MINIMAX[i] == 0) && (MINIMAX[i - 1] > 0))
@@ -82,23 +89,29 @@ public class BoardState {
                     ITERATORS[k][i * Main.MAX_IND + j] = TRANSFORMS[k].transform(i, j);
         }
 
-        for (String feature : new String[] {"player_1_score", "player_-1_score",
-                "player_1_fixed", "player_-1_fixed"})
-            attributes.addElement(new Attribute(feature));
+        attributes.addElement(new Attribute("player_1_score", 0));
+        attributes.addElement(new Attribute("player_-1_score", 1));
+        attributes.addElement(new Attribute("player_1_fixed", 2));
+        attributes.addElement(new Attribute("player_-1_fixed", 3));
 
         for (byte i = 0; i < Main.MAX_IND; i++)
             for (byte j = 0; j < Main.MAX_IND; j++)
-                attributes.addElement(new Attribute(i + " " + j));
+                attributes.addElement(new Attribute(i + " " + j, 4 + i * Main.MAX_IND + j));
 
         for (byte i = 0; i < Main.MAX_IND; i++)
             for (byte j = 0; j < Main.MAX_IND; j++)
-                attributes.addElement(new Attribute("f " + i + " " + j));
+                attributes.addElement(new Attribute("f " + i + " " + j, 4 + Main.MAX + i * Main.MAX_IND + j));
 
-        FastVector labels = new FastVector(3);
-        labels.addElement("white");
-        labels.addElement("dark");
-        labels.addElement("truce");
-        Attribute label = new Attribute("label", labels);
+        Attribute label = null;
+        if (!USE_MINIMAX_FOR_PREDICTING) {
+            FastVector labels = new FastVector(3);
+            labels.addElement("white");
+            labels.addElement("dark");
+            labels.addElement("truce");
+            label = new Attribute("label", labels);
+        } else {
+            label = new Attribute("label", 4 + 2 * Main.MAX);
+        }
         attributes.addElement(label);
     }
 
@@ -221,7 +234,7 @@ public class BoardState {
 
         ArrayList<BoardState> moves;
         if (MINIMAX[level - 1] != 0) {
-            moves = minimax((byte) (MINIMAX[level - 1] + level), null, (byte) 0, true, (byte) (level + MINIMAX_LEVELS_TO_STORE));
+            moves = minimax((byte) (MINIMAX[level - 1] + level), null, (byte) 0, true, (byte) (level + MINIMAX_LEVELS_TO_STORE), MINIMAX_CLASS[level - 1]);
         } else
             moves = getMoves(true);
 
@@ -270,13 +283,14 @@ public class BoardState {
      * @param name   name of the attribute
      * @return
      */
-    public Instances getInstances(byte level, int count, String name) {
+    public Instances getInstances(byte level, int count, String name,
+                                  int evaluationLevel, Classifier classifier) {
         Instances instances = new Instances(name, attributes, count);
         instances.setClassIndex(attributes.size() - 1);
         Random random = new Random();
         int i = 0;
         while (i < count) {
-            if (i % 100 == 0)
+            if (i % 5 == 0)
                 System.out.println((count - i) + " states left");
             int currLevel = scores[Main.WHITE] + scores[Main.DARK];
             BoardState currState = this;
@@ -301,7 +315,7 @@ public class BoardState {
                 continue;
             if (coincDict[currLevel - 1].get(currState.getCode()) != null)
                 continue;
-            Instance instance = currState.stateToInstance(true);
+            Instance instance = currState.stateToInstance(true, evaluationLevel, classifier);
             coincDict[currLevel - 1].put(currState.getCode(), (byte) instance.value(attributes.size() - 1));
             instances.add(instance);
             i++;
@@ -315,7 +329,7 @@ public class BoardState {
      * @param assessLabel  if True, calculate the winner for the state
      * @return
      */
-    public Instance stateToInstance(boolean assessLabel) {
+    public Instance stateToInstance(boolean assessLabel, int evaluationLevel, Classifier classifier) {
         Instance instance = new weka.core.Instance(attributes.size());
         instance.setValue((Attribute) attributes.elementAt(0), scores[turn]);
         instance.setValue((Attribute) attributes.elementAt(1), scores[1 - turn]);
@@ -334,12 +348,31 @@ public class BoardState {
                 instance.setValue((Attribute) attributes.elementAt(4 + Main.MAX + i * Main.MAX_IND + j), value);
             }
 
-        if (assessLabel) {
-            int value = analyze();
-            value = ((Attribute) attributes.elementAt(attributes.size() - 1)).indexOfValue((value == Main.WHITE) ? "white": (
-                    (value == Main.DARK) ? "dark": "truce"));
-            instance.setValue((Attribute) attributes.elementAt(attributes.size() - 1), value);
-        }
+        if (assessLabel)
+            if (!USE_MINIMAX_FOR_PREDICTING) {
+                int value = analyze();
+                value = ((Attribute) attributes.elementAt(attributes.size() - 1)).indexOfValue((value == Main.WHITE) ? "white" : (
+                        (value == Main.DARK) ? "dark" : "truce"));
+                instance.setValue((Attribute) attributes.elementAt(attributes.size() - 1), value);
+            } else {
+                ArrayList<BoardState> moves = minimax((byte) (evaluationLevel), null, (byte) 0, true,
+                        (byte) evaluationLevel, classifier);
+                if (moves == null) {
+                    turn = (byte) (1 - turn);
+                    moves = minimax((byte) (evaluationLevel), null, (byte) 0, true,
+                            (byte) evaluationLevel, classifier);
+                }
+                int value;
+                if (moves == null)
+                    value = scores[Main.DARK] - scores[Main.WHITE];
+                else
+                    value = moves.get(0).getScore();
+
+                for (int i = scores[Main.WHITE] + scores[Main.DARK] - 1; i < Main.MAX; i++)
+                    minimaxDict[i] = new HashMap<>();
+
+                instance.setValue((Attribute) attributes.elementAt(attributes.size() - 1), value);
+            }
 
         return instance;
     }
@@ -393,18 +426,36 @@ public class BoardState {
      * @return
      */
     private ArrayList<BoardState> minimax(byte maxDepth, Byte scoreAbove,
-                                          byte reverse, boolean sort, byte depthInDict) {
+                                          byte reverse, boolean sort, byte depthInDict, Classifier classifier) {
+        //TODO minimize the time, not the score
         minimaxScore = null;
         int level = scores[Main.WHITE] + scores[Main.DARK];
-        if ((maxDepth == level) || (fixedScores[Main.WHITE] > Main.MAX / 2) ||
+        if ((fixedScores[Main.WHITE] > Main.MAX / 2) ||
                 (fixedScores[Main.DARK] > Main.MAX / 2) || (reverse == 2))
             return null;
+
+        if (maxDepth == level) {
+            if (classifier != null) {
+                if (currMinimax.numInstances() == MAX_MINIMAX_INSTANCES) {
+                    currMinimax = new Instances("currMinimax", attributes, MAX_MINIMAX_INSTANCES);
+                    currMinimax.setClassIndex(attributes.size() - 1);
+                }
+                Instance wekaRepresentation = stateToInstance(false, -1, null);
+                currMinimax.add(wekaRepresentation);
+                try {
+                    minimaxScore = (byte) Math.round(classifier.classifyInstance(wekaRepresentation));
+                } catch (Exception ex) {
+                    System.out.print("Problem here");
+                }
+            }
+            return null;
+        }
 
         ArrayList<BoardState> moves = getMoves(false);
 
         if (moves.size() == 0) {
             turn = (byte) (1 - turn);
-            minimax(maxDepth, null, (byte) (reverse + 1), false, depthInDict);
+            minimax(maxDepth, null, (byte) (reverse + 1), false, depthInDict, classifier);
             turn = (byte) (1 - turn);
             return null;
         }
@@ -420,7 +471,7 @@ public class BoardState {
                 currScore = minimaxDict[level - 2].get(tmp);
                 move.minimaxScore = currScore;
             } else {
-                move.minimax(maxDepth, minimaxScore, (byte) 0, false, depthInDict);
+                move.minimax(maxDepth, minimaxScore, (byte) 0, false, depthInDict, classifier);
                 currScore = move.getScore();
                 if (level <= depthInDict)
                     minimaxDict[level - 2].put(tmp, currScore);
