@@ -48,6 +48,8 @@ public class Main {
         System.out.println("Classifier-18 loaded");*/
         for (int i = 24; i > 0; i--)
             BoardState.MINIMAX_CLASS[i] = classifier25;
+        for (int i = MAX - 1; i > 14; i--)
+            BoardState.MINIMAX_CLASS[i] = null;
         /*for (int i = 19; i > 0; i--)
             BoardState.MINIMAX_CLASS[i] = classifier20;
         for (int i = 17; i > 0; i--)

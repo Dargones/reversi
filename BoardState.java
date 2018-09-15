@@ -7,11 +7,12 @@ import weka.core.Instance;
 import weka.core.Instances;
 
 import java.util.*;
+import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * Created by alexanderfedchin on 8/31/18.
  */
-public class BoardState {
+public class BoardState implements Runnable{
 
     public final static boolean USE_MINIMAX_FOR_PREDICTING = true;
 
@@ -25,19 +26,19 @@ public class BoardState {
     private static final byte TRACE_LEVEL = 15; //The level from which to begin
     // to trace the states of the board and print them. Level is the number of
     // disks already on the board
-    private static final byte MINIMAX_LEVELS_TO_STORE = 7;
+    private static final byte MINIMAX_LEVELS_TO_STORE = 14;
     // number of minimax level calculations that should be kept intact (these
     // will not be recalculated but will take up space)
     private static final byte[] MINIMAX = {0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0};
     // Levels at which to use minimax and how deep the minimax calculations
     // should dive. Note that the actual calculations are made at the levels at
     // which the value of the array increases
     public static Classifier[] MINIMAX_CLASS = new Classifier[Main.MAX];
-    private static final byte MULTIPROCESSING_LEVEL = 40;
+    private static final byte MULTIPROCESSING_LEVEL = 16;
     // IMPORTANT: Multiprocessing level should be below the first MINIMAX level
-    private static final int REPORT_FQ = (int) Math.pow(2, 20);
+    private static final int REPORT_FQ = (int) Math.pow(2, 18);
     // frequency of the report. Report is printed then count % REPORT_FQ == 0
     private static final Transformation[] TRANSFORMS = {
             (x, y) -> new byte[]{(byte) (MIMO - x), y}, (x, y) -> new byte[]{y, x},
@@ -56,13 +57,13 @@ public class BoardState {
     // this level can change depending on how much memory the program has
     private static long count = 0; // number of different states considered while
     // traversing the game. The count does not include the final states
-    private static HashMap<StateCode, Byte>[] coincDict = new HashMap[Main.MAX];
+    private static ConcurrentHashMap<StateCode, Byte>[] coincDict = new ConcurrentHashMap[Main.MAX];
     // a list of dictionaries to look up states for which the solution is known
     private static long inTheDict = 0;
     // the number of elements in the coincDictionary. If this value reaches
     // DICT_SIZE_MAX, a whole level is released from the dictionary and the
     // coincLevel is lowered by one
-    private static HashMap<StateCode, Byte>[] minimaxDict = new HashMap[Main.MAX];
+    private static ConcurrentHashMap<StateCode, Byte>[] minimaxDict = new ConcurrentHashMap[Main.MAX];
     // same for minimax. The difference is in that in the minimax dictionary the
     // actual minimax values are stored
     private static boolean terminateThreads = false; // True, only if a thread
@@ -77,8 +78,8 @@ public class BoardState {
             if ((MINIMAX[i] == 0) && (MINIMAX[i - 1] > 0))
                 MINIMAX[i] = (byte) (MINIMAX[i - 1] - 1);
         for (byte i = 0; i < coincDict.length; i++) {
-            coincDict[i] = new HashMap<>();
-            minimaxDict[i] = new HashMap<>();
+            coincDict[i] = new ConcurrentHashMap<>();
+            minimaxDict[i] = new ConcurrentHashMap<>();
         }
 
         ITERATORS = new byte[TRANSFORMS.length][][];
@@ -247,7 +248,28 @@ public class BoardState {
         }
 
         if (level == MULTIPROCESSING_LEVEL) {
-            //TODO
+            Thread[] threads = new Thread[moves.size()];
+            for (int i = 0; i < moves.size(); i++) {
+                threads[i] = new Thread(moves.get(i));
+                moves.get(i).minimaxScore = null;
+                threads[i].start();
+            }
+            try {
+                for (int i = 0; i < moves.size(); i++)
+                    threads[i].join();
+            } catch (Exception ex) {
+                System.out.println("problem");
+            }
+            if (terminateThreads) {
+                terminateThreads = false;
+                return returnResult(curr, level, turn);
+            }
+            for (int i = 0; i < moves.size(); i++) {
+                if (moves.get(i).minimaxScore == Main.TRUCE)
+                    return returnResult(curr, level, Main.TRUCE);
+            }
+            return returnResult(curr, level, (byte) (1 - turn));
+
         } else if (level < MULTIPROCESSING_LEVEL)
             Main.currBF[level - 1] = (long) moves.size();
 
@@ -369,7 +391,7 @@ public class BoardState {
                     value = moves.get(0).getScore();
 
                 for (int i = scores[Main.WHITE] + scores[Main.DARK] - 1; i < Main.MAX; i++)
-                    minimaxDict[i] = new HashMap<>();
+                    minimaxDict[i] = new ConcurrentHashMap<>();
 
                 instance.setValue((Attribute) attributes.elementAt(attributes.size() - 1), value);
             }
@@ -402,14 +424,12 @@ public class BoardState {
             int i = level - 1;
             while (MINIMAX[i] != 0) {
                 //TODO: What should be the initial capacity?
-                minimaxDict[i] = new HashMap<>();
+                minimaxDict[i] = new ConcurrentHashMap<>();
                 i += 1;
             }
         }
-        if ((level == MULTIPROCESSING_LEVEL + 1) && (result == 1 - turn)) {
-            //terminateThreads = true;
-            //TODO:Turn this on
-        }
+        if ((level == MULTIPROCESSING_LEVEL + 1) && (result == 1 - turn))
+            terminateThreads = true;
         return result;
     }
 
@@ -724,6 +744,11 @@ public class BoardState {
         if (minimaxScore == null)
             return (byte) (fixedScores[Main.DARK] - fixedScores[Main.WHITE]);
         return minimaxScore;
+    }
+
+    @Override
+    public void run() {
+        minimaxScore = analyze();
     }
 
     /**
