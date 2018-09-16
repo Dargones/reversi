@@ -40,15 +40,15 @@ public class Main {
     }
 
     public static void main(String args[]) {
-        Classifier classifier25 = Predictor.getClassifier("data_level_25", "data_level_25_test");
-        System.out.println("Classifier-25 loaded");
-        /*Classifier classifier20 = Predictor.getClassifier("data_level_20", "data_level_20_test");
-        System.out.println("Classifier-20 loaded");
+        // Classifier classifier25 = Predictor.getClassifier("data_level_25", "data_level_25_test");
+        // System.out.println("Classifier-25 loaded");
+        // Classifier classifier20 = Predictor.getClassifier("data_level_20", "data_level_20_test");
+        // System.out.println("Classifier-20 loaded");
         Classifier classifier18 = Predictor.getClassifier("data_level_18", "data_level_18_test");
-        System.out.println("Classifier-18 loaded");*/
-        for (int i = 24; i > 0; i--)
-            BoardState.MINIMAX_CLASS[i] = classifier25;
-        for (int i = MAX - 1; i > 14; i--)
+        System.out.println("Classifier-18 loaded");
+        for (int i = 17; i > 0; i--)
+            BoardState.MINIMAX_CLASS[i] = classifier18;
+        for (int i = MAX - 1; i > 17; i--)
             BoardState.MINIMAX_CLASS[i] = null;
         /*for (int i = 19; i > 0; i--)
             BoardState.MINIMAX_CLASS[i] = classifier20;

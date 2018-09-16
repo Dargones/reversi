@@ -26,17 +26,17 @@ public class BoardState implements Runnable{
     private static final byte TRACE_LEVEL = 15; //The level from which to begin
     // to trace the states of the board and print them. Level is the number of
     // disks already on the board
-    private static final byte MINIMAX_LEVELS_TO_STORE = 14;
+    private static final byte MINIMAX_LEVELS_TO_STORE = 7;
     // number of minimax level calculations that should be kept intact (these
     // will not be recalculated but will take up space)
     private static final byte[] MINIMAX = {0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0,
-            11, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0};
     // Levels at which to use minimax and how deep the minimax calculations
     // should dive. Note that the actual calculations are made at the levels at
     // which the value of the array increases
     public static Classifier[] MINIMAX_CLASS = new Classifier[Main.MAX];
-    private static final byte MULTIPROCESSING_LEVEL = 16;
+    private static final byte MULTIPROCESSING_LEVEL = 18;
     // IMPORTANT: Multiprocessing level should be below the first MINIMAX level
     private static final int REPORT_FQ = (int) Math.pow(2, 18);
     // frequency of the report. Report is printed then count % REPORT_FQ == 0
@@ -50,7 +50,7 @@ public class BoardState implements Runnable{
             (x, y) -> new byte[]{(byte) (MIMO - y), x}};
     private static byte[][][] ITERATORS;
     private static final long DICT_MAX_SIZE = 9000000;
-    private static final int MAX_MINIMAX_INSTANCES = 10000;
+    private static final int MAX_MINIMAX_INSTANCES = 50000;
 
     private static byte coincLevel = Main.MAX - 2;
     // The level from which to begin to look up the state inside the coincDict
@@ -63,7 +63,7 @@ public class BoardState implements Runnable{
     // the number of elements in the coincDictionary. If this value reaches
     // DICT_SIZE_MAX, a whole level is released from the dictionary and the
     // coincLevel is lowered by one
-    private static ConcurrentHashMap<StateCode, Byte>[] minimaxDict = new ConcurrentHashMap[Main.MAX];
+    private static HashMap<StateCode, Byte>[] minimaxDict = new HashMap[Main.MAX];
     // same for minimax. The difference is in that in the minimax dictionary the
     // actual minimax values are stored
     private static boolean terminateThreads = false; // True, only if a thread
@@ -78,8 +78,8 @@ public class BoardState implements Runnable{
             if ((MINIMAX[i] == 0) && (MINIMAX[i - 1] > 0))
                 MINIMAX[i] = (byte) (MINIMAX[i - 1] - 1);
         for (byte i = 0; i < coincDict.length; i++) {
-            coincDict[i] = new ConcurrentHashMap<>();
-            minimaxDict[i] = new ConcurrentHashMap<>();
+            coincDict[i] = new ConcurrentHashMap<>((int) (DICT_MAX_SIZE / Math.pow(2, coincDict.length - i) + 1));
+            minimaxDict[i] = new HashMap<>();
         }
 
         ITERATORS = new byte[TRANSFORMS.length][][];
@@ -391,7 +391,7 @@ public class BoardState implements Runnable{
                     value = moves.get(0).getScore();
 
                 for (int i = scores[Main.WHITE] + scores[Main.DARK] - 1; i < Main.MAX; i++)
-                    minimaxDict[i] = new ConcurrentHashMap<>();
+                    minimaxDict[i] = new HashMap<>();
 
                 instance.setValue((Attribute) attributes.elementAt(attributes.size() - 1), value);
             }
@@ -424,7 +424,7 @@ public class BoardState implements Runnable{
             int i = level - 1;
             while (MINIMAX[i] != 0) {
                 //TODO: What should be the initial capacity?
-                minimaxDict[i] = new ConcurrentHashMap<>();
+                minimaxDict[i] = new HashMap<>();
                 i += 1;
             }
         }
