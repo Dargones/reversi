@@ -9,21 +9,25 @@ public class Main {
     public static final byte WHITE = 0;
     public static final byte DARK = 1;
     public static final byte TRUCE = 2; // can also mean "unoccupied"
-    public static final byte MAX_IND = 6; // the dimension of the board.
+    public static final byte MAX_IND = 5; // the dimension of the board.
     // The goal is to solve the puzzle for MAX_IND = 8
     public static final byte MAX = MAX_IND * MAX_IND;
     // total number of tiles on the board
     public static final byte INIT = 4;
     // initial positions filled
-    public static final double[] EXP_BF = {0, 0, 0, 1.0, 3.0, 1.33, 3.25, 1.15,
+    /* public static final double[] EXP_BF = {0, 0, 0, 1.0, 3.0, 1.33, 3.25, 1.15,
             4.67, 1.03, 4.54, 1.18, 4.12, 1.25, 4.21, 1.45, 0.0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; */
     // experimentally obtained branching factors for lower levels - these can be
     // used to predict the time remaining to solve the problem. 0 means that
     // there is no experimentally obtained value
 
+    public static long count = 0; // number of different states considered while
+    // traversing the game. The count does not include the final states
     public static Long[] levCount = new Long[MAX];
     // stores the total number of different states considered at each level
+    public static long[] lastTimeUpdated = new long[Main.MAX];
+    // the value of count at the last time this level was calculated
     public static Long[] coincCount = new Long[MAX];
     // stores the number of times the coincDict was used. Either levCount or
     // coincCount can be updated at each pass, but never both
@@ -36,24 +40,21 @@ public class Main {
             levCount[i] = 0L;
             coincCount[i] = 0L;
             currBF[i] = 0L;
+            lastTimeUpdated[i] = 0L;
         }
     }
 
     public static void main(String args[]) {
-        // Classifier classifier25 = Predictor.getClassifier("data_level_25", "data_level_25_test");
-        // System.out.println("Classifier-25 loaded");
-        // Classifier classifier20 = Predictor.getClassifier("data_level_20", "data_level_20_test");
-        // System.out.println("Classifier-20 loaded");
+        /* Classifier classifier20 = Predictor.getClassifier("data_level_20", "data_level_20_test");
+        System.out.println("Classifier-20 loaded");
         Classifier classifier18 = Predictor.getClassifier("data_level_18", "data_level_18_test");
         System.out.println("Classifier-18 loaded");
-        for (int i = 17; i > 0; i--)
-            BoardState.MINIMAX_CLASS[i] = classifier18;
-        for (int i = MAX - 1; i > 17; i--)
+        for (int i = MAX - 1; i >= 0; i--)
             BoardState.MINIMAX_CLASS[i] = null;
-        /*for (int i = 19; i > 0; i--)
+        for (int i = 19; i >= 0; i--)
             BoardState.MINIMAX_CLASS[i] = classifier20;
-        for (int i = 17; i > 0; i--)
-            BoardState.MINIMAX_CLASS[i] = classifier18;*/
+        for (int i = 17; i >= 0; i--)
+            BoardState.MINIMAX_CLASS[i] = classifier18; */
         BoardState state = new BoardState();
         //TODO: find an alternative for cProfile
         byte winner = state.analyze();
@@ -107,18 +108,18 @@ public class Main {
                 curr -= 1;
             if (curr != 0)
                 non_zero_found = true;
-            for (int j = i + 2; j < MAX; j++)
-                curr *= bfs[j - INIT];
+            curr *= (double) lastTimeUpdated[i + 1] / levCount[i + 1] * ((double) sum(levCount) / count);
             statesLeft += (long) curr;
         }
-        double totalMod = (statesLeft + sum(levCount)) / statesLeft;
+        double totalMod = (double) (statesLeft + sum(levCount)) / statesLeft;
         // totalMod ties the states left (before next level) and the total
         // expected number of states
-        for (int i = min_level_reached - 3; i > 2; i--)
-            if (EXP_BF[i] != 0)
-                totalMod *= EXP_BF[i];
-            else
-                totalMod *= currBF[i];
+        for (int i = min_level_reached - 3; i > 2; i--) {
+            // if (EXP_BF[i] != 0)
+            // totalMod *= EXP_BF[i];
+            // else
+            totalMod *= currBF[i];
+        }
         long timeLeft = (long) ((double) (System.currentTimeMillis() - timeStart) /
                 sum(levCount) * statesLeft);
 

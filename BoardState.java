@@ -23,13 +23,13 @@ public class BoardState implements Runnable{
     private static final byte[][] DIRS = {{0, 1}, {1, 1}, {1, 0}, {1, -1},
             {0, -1}, {-1, -1}, {-1, 0}, {-1, 1}};
     // the 8 directions in which one can go from a tile.
-    private static final byte TRACE_LEVEL = 15; //The level from which to begin
+    private static final byte TRACE_LEVEL = 3; //The level from which to begin
     // to trace the states of the board and print them. Level is the number of
     // disks already on the board
-    private static final byte MINIMAX_LEVELS_TO_STORE = 7;
+    private static final byte MINIMAX_LEVELS_TO_STORE = 8;
     // number of minimax level calculations that should be kept intact (these
     // will not be recalculated but will take up space)
-    private static final byte[] MINIMAX = {0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0,
+    private static final byte[] MINIMAX = {0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 0, 5,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0};
     // Levels at which to use minimax and how deep the minimax calculations
@@ -38,7 +38,7 @@ public class BoardState implements Runnable{
     public static Classifier[] MINIMAX_CLASS = new Classifier[Main.MAX];
     private static final byte MULTIPROCESSING_LEVEL = 18;
     // IMPORTANT: Multiprocessing level should be below the first MINIMAX level
-    private static final int REPORT_FQ = (int) Math.pow(2, 18);
+    private static final int REPORT_FQ = (int) Math.pow(2, 7);
     // frequency of the report. Report is printed then count % REPORT_FQ == 0
     private static final Transformation[] TRANSFORMS = {
             (x, y) -> new byte[]{(byte) (MIMO - x), y}, (x, y) -> new byte[]{y, x},
@@ -55,8 +55,6 @@ public class BoardState implements Runnable{
     private static byte coincLevel = Main.MAX - 2;
     // The level from which to begin to look up the state inside the coincDict
     // this level can change depending on how much memory the program has
-    private static long count = 0; // number of different states considered while
-    // traversing the game. The count does not include the final states
     private static ConcurrentHashMap<StateCode, Byte>[] coincDict = new ConcurrentHashMap[Main.MAX];
     // a list of dictionaries to look up states for which the solution is known
     private static long inTheDict = 0;
@@ -226,10 +224,10 @@ public class BoardState implements Runnable{
             }
         }
 
-        count += 1;
+        Main.count += 1;
         if ((level <= MULTIPROCESSING_LEVEL) &&
-                ((count / REPORT_FQ) > reportsPrinted)) {
-            reportsPrinted = (int) (count / REPORT_FQ);
+                ((Main.count / REPORT_FQ) > reportsPrinted)) {
+            reportsPrinted = (int) (Main.count / REPORT_FQ);
             Main.printReport();
         }
 
@@ -409,6 +407,7 @@ public class BoardState implements Runnable{
      */
     private byte returnResult(StateCode curr, int level, byte result) {
         Main.levCount[level - 1] += 1;
+        Main.lastTimeUpdated[level - 1] = Main.count;
         if (level <= coincLevel) {
             coincDict[level - 1].put(curr, result);
             inTheDict += 1;
