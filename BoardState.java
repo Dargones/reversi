@@ -23,22 +23,22 @@ public class BoardState implements Runnable{
     private static final byte[][] DIRS = {{0, 1}, {1, 1}, {1, 0}, {1, -1},
             {0, -1}, {-1, -1}, {-1, 0}, {-1, 1}};
     // the 8 directions in which one can go from a tile.
-    private static final byte TRACE_LEVEL = 3; //The level from which to begin
+    private static final byte TRACE_LEVEL = 14; //The level from which to begin
     // to trace the states of the board and print them. Level is the number of
     // disks already on the board
     private static final byte MINIMAX_LEVELS_TO_STORE = 8;
     // number of minimax level calculations that should be kept intact (these
     // will not be recalculated but will take up space)
-    private static final byte[] MINIMAX = {0, 0, 0, 11, 0, 0, 0, 0, 0, 0, 0, 5,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+    private static final byte[] MINIMAX = {0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0,
+            7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0};
     // Levels at which to use minimax and how deep the minimax calculations
     // should dive. Note that the actual calculations are made at the levels at
     // which the value of the array increases
     public static Classifier[] MINIMAX_CLASS = new Classifier[Main.MAX];
-    private static final byte MULTIPROCESSING_LEVEL = 18;
+    private static final byte MULTIPROCESSING_LEVEL = 22;
     // IMPORTANT: Multiprocessing level should be below the first MINIMAX level
-    private static final int REPORT_FQ = (int) Math.pow(2, 7);
+    private static final int REPORT_FQ = (int) Math.pow(2, 21);
     // frequency of the report. Report is printed then count % REPORT_FQ == 0
     private static final Transformation[] TRANSFORMS = {
             (x, y) -> new byte[]{(byte) (MIMO - x), y}, (x, y) -> new byte[]{y, x},
@@ -49,13 +49,13 @@ public class BoardState implements Runnable{
             (x, y) -> new byte[]{y, (byte) (MIMO - x)},
             (x, y) -> new byte[]{(byte) (MIMO - y), x}};
     private static byte[][][] ITERATORS;
-    private static final long DICT_MAX_SIZE = 9000000;
+    private static final long DICT_MAX_SIZE = 10000000;
     private static final int MAX_MINIMAX_INSTANCES = 50000;
 
     private static byte coincLevel = Main.MAX - 2;
     // The level from which to begin to look up the state inside the coincDict
     // this level can change depending on how much memory the program has
-    private static ConcurrentHashMap<StateCode, Byte>[] coincDict = new ConcurrentHashMap[Main.MAX];
+    public static ConcurrentHashMap<StateCode, Byte>[] coincDict = new ConcurrentHashMap[Main.MAX];
     // a list of dictionaries to look up states for which the solution is known
     private static long inTheDict = 0;
     // the number of elements in the coincDictionary. If this value reaches
@@ -411,7 +411,7 @@ public class BoardState implements Runnable{
         if (level <= coincLevel) {
             coincDict[level - 1].put(curr, result);
             inTheDict += 1;
-            if (inTheDict > DICT_MAX_SIZE) {
+            if ((level <= MULTIPROCESSING_LEVEL) && (inTheDict > DICT_MAX_SIZE)) {
                 System.out.println("coincLevel reduced to " + (coincLevel - 1));
                 inTheDict -= coincDict[coincLevel - 1].size();
                 coincDict[coincLevel - 1] = null;

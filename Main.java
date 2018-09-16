@@ -2,6 +2,9 @@ package reversi;
 
 import weka.classifiers.Classifier;
 
+import java.io.FileOutputStream;
+import java.io.ObjectOutputStream;
+
 /**
  * Created by alexanderfedchin on 8/30/18.
  */
@@ -9,13 +12,13 @@ public class Main {
     public static final byte WHITE = 0;
     public static final byte DARK = 1;
     public static final byte TRUCE = 2; // can also mean "unoccupied"
-    public static final byte MAX_IND = 5; // the dimension of the board.
+    public static final byte MAX_IND = 6; // the dimension of the board.
     // The goal is to solve the puzzle for MAX_IND = 8
     public static final byte MAX = MAX_IND * MAX_IND;
     // total number of tiles on the board
     public static final byte INIT = 4;
     // initial positions filled
-    /* public static final double[] EXP_BF = {0, 0, 0, 1.0, 3.0, 1.33, 3.25, 1.15,
+    /* public static final double[] EXP_BF = {0, 0, 0, 1.0, 1.0, 1.33, 3.25, 1.15,
             4.67, 1.03, 4.54, 1.18, 4.12, 1.25, 4.21, 1.45, 0.0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; */
     // experimentally obtained branching factors for lower levels - these can be
@@ -45,7 +48,7 @@ public class Main {
     }
 
     public static void main(String args[]) {
-        /* Classifier classifier20 = Predictor.getClassifier("data_level_20", "data_level_20_test");
+        Classifier classifier20 = Predictor.getClassifier("data_level_20", "data_level_20_test");
         System.out.println("Classifier-20 loaded");
         Classifier classifier18 = Predictor.getClassifier("data_level_18", "data_level_18_test");
         System.out.println("Classifier-18 loaded");
@@ -54,7 +57,7 @@ public class Main {
         for (int i = 19; i >= 0; i--)
             BoardState.MINIMAX_CLASS[i] = classifier20;
         for (int i = 17; i >= 0; i--)
-            BoardState.MINIMAX_CLASS[i] = classifier18; */
+            BoardState.MINIMAX_CLASS[i] = classifier18;
         BoardState state = new BoardState();
         //TODO: find an alternative for cProfile
         byte winner = state.analyze();
@@ -95,8 +98,19 @@ public class Main {
         System.out.println("Acceleration: " + acceleration);
 
         printArray("Current BFs: ", currBF, 1);
-        if (min_level_reached == INIT)
+        if (min_level_reached == INIT) {
+            try {
+                FileOutputStream fileOut =
+                        new FileOutputStream("hashtable.ser");
+                ObjectOutputStream out = new ObjectOutputStream(fileOut);
+                out.writeObject(BoardState.coincDict);
+                out.close();
+                fileOut.close();
+            } catch (Exception i) {
+                i.printStackTrace();
+            }
             return;
+        }
 
         Long statesLeft = 0L;
         // states left to analyze before next level is reached
@@ -115,19 +129,20 @@ public class Main {
         // totalMod ties the states left (before next level) and the total
         // expected number of states
         for (int i = min_level_reached - 3; i > 2; i--) {
-            // if (EXP_BF[i] != 0)
+            //if (EXP_BF[i] != 0)
             // totalMod *= EXP_BF[i];
             // else
             totalMod *= currBF[i];
         }
-        long timeLeft = (long) ((double) (System.currentTimeMillis() - timeStart) /
-                sum(levCount) * statesLeft);
+        long currTime = System.currentTimeMillis();
+        long timeLeft = (long) ((double) (currTime - timeStart) / sum(levCount) * statesLeft);
 
         System.out.println(statesLeft + " states left before next level");
         System.out.println(((Double)(totalMod * statesLeft)).longValue() +
                 " states left total");
         System.out.println("Time left before next level: " + getDuration(timeLeft));
         System.out.println("Time left total: " + getDuration((long) (timeLeft * totalMod)));
+        System.out.println("Current time: " + currTime);
         System.out.println("\n");
         /* try {
             Thread.sleep(20000);
