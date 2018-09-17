@@ -447,6 +447,7 @@ public class BoardState implements Runnable{
     private ArrayList<BoardState> minimax(byte maxDepth, Byte scoreAbove,
                                           byte reverse, boolean sort, byte depthInDict, Classifier classifier) {
         //TODO minimize the time, not the score
+        //TODO make use of coincDict here
         minimaxScore = null;
         int level = scores[Main.WHITE] + scores[Main.DARK];
         if ((fixedScores[Main.WHITE] > Main.MAX / 2) ||
@@ -732,7 +733,7 @@ public class BoardState implements Runnable{
                     its = new ArrayList<>(1);
                 }
                 if (board[coords[0]][coords[1]] == max)
-                    its.add(j);
+                    its.add(old_its.get(j));
             }
             code.rows[i / Main.MAX_IND] = (short) ((code.rows[i / Main.MAX_IND] + max) * 3);
         }
