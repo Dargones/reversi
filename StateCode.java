@@ -1,9 +1,11 @@
 package reversi;
 
+import java.io.Serializable;
+
 /**
  * Created by alexanderfedchin on 9/12/18.
  */
-public class StateCode {
+public class StateCode implements Serializable {
     // Represents the state as a code that can be hashed
     short[] rows;
     byte turn;
