@@ -30,7 +30,7 @@ public class BoardState implements Runnable{
     // number of minimax level calculations that should be kept intact (these
     // will not be recalculated but will take up space)
     private static final byte[] MINIMAX = {0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0,
-            7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            7, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0};
     // Levels at which to use minimax and how deep the minimax calculations
     // should dive. Note that the actual calculations are made at the levels at
@@ -38,7 +38,7 @@ public class BoardState implements Runnable{
     public static Classifier[] MINIMAX_CLASS = new Classifier[Main.MAX];
     private static final byte MULTIPROCESSING_LEVEL = 22;
     // IMPORTANT: Multiprocessing level should be below the first MINIMAX level
-    private static final int REPORT_FQ = (int) Math.pow(2, 21);
+    private static final int REPORT_FQ = (int) Math.pow(2, 23);
     // frequency of the report. Report is printed then count % REPORT_FQ == 0
     private static final Transformation[] TRANSFORMS = {
             (x, y) -> new byte[]{(byte) (MIMO - x), y}, (x, y) -> new byte[]{y, x},
@@ -55,13 +55,13 @@ public class BoardState implements Runnable{
     private static byte coincLevel = Main.MAX - 2;
     // The level from which to begin to look up the state inside the coincDict
     // this level can change depending on how much memory the program has
-    public static ConcurrentHashMap<StateCode, Byte>[] coincDict = new ConcurrentHashMap[Main.MAX];
+    public static FourLayeredHashMap[] coincDict = new FourLayeredHashMap[Main.MAX];
     // a list of dictionaries to look up states for which the solution is known
     private static long inTheDict = 0;
     // the number of elements in the coincDictionary. If this value reaches
     // DICT_SIZE_MAX, a whole level is released from the dictionary and the
     // coincLevel is lowered by one
-    private static HashMap<StateCode, Byte>[] minimaxDict = new HashMap[Main.MAX];
+    private static FourLayeredHashMap[] minimaxDict = new FourLayeredHashMap[Main.MAX];
     // same for minimax. The difference is in that in the minimax dictionary the
     // actual minimax values are stored
     private static boolean terminateThreads = false; // True, only if a thread
@@ -76,8 +76,8 @@ public class BoardState implements Runnable{
             if ((MINIMAX[i] == 0) && (MINIMAX[i - 1] > 0))
                 MINIMAX[i] = (byte) (MINIMAX[i - 1] - 1);
         for (byte i = 0; i < coincDict.length; i++) {
-            coincDict[i] = new ConcurrentHashMap<>((int) (DICT_MAX_SIZE / Math.pow(2, coincDict.length - i) + 1));
-            minimaxDict[i] = new HashMap<>();
+            coincDict[i] = new FourLayeredHashMap();
+            minimaxDict[i] = new FourLayeredHashMap();
         }
 
         ITERATORS = new byte[TRANSFORMS.length][][];
@@ -211,16 +211,17 @@ public class BoardState implements Runnable{
             return Main.TRUCE;
         }
 
-        StateCode curr = null;
+        int[] curr = null;
         if (level <= coincLevel) {
             // check if the winner for this state was already calculated
             curr = getCode();
             if (level <= TRACE_LEVEL) { // for debug purposes only
                 System.out.println(this);
             }
-            if (coincDict[level - 1].get(curr) != null) {
+            Byte tmp = coincDict[level - 1].get(curr);
+            if (tmp != null) {
                 Main.coincCount[level - 1] += 1;
-                return coincDict[level - 1].get(curr);
+                return tmp;
             }
         }
 
@@ -310,7 +311,7 @@ public class BoardState implements Runnable{
         Random random = new Random();
         int i = 0;
         while (i < count) {
-            if (i % 5 == 0)
+            if (i % 100 == 0)
                 System.out.println((count - i) + " states left");
             int currLevel = scores[Main.WHITE] + scores[Main.DARK];
             BoardState currState = this;
@@ -336,7 +337,7 @@ public class BoardState implements Runnable{
             if (coincDict[currLevel - 1].get(currState.getCode()) != null)
                 continue;
             Instance instance = currState.stateToInstance(true, evaluationLevel, classifier);
-            coincDict[currLevel - 1].put(currState.getCode(), (byte) instance.value(attributes.size() - 1));
+            coincDict[currLevel - 1].putIfAbsent(currState.getCode(), (byte) instance.value(attributes.size() - 1));
             instances.add(instance);
             i++;
         }
@@ -370,6 +371,7 @@ public class BoardState implements Runnable{
 
         if (assessLabel)
             if (!USE_MINIMAX_FOR_PREDICTING) {
+                // TODO: Why does Intellij shadows this out?
                 int value = analyze();
                 value = ((Attribute) attributes.elementAt(attributes.size() - 1)).indexOfValue((value == Main.WHITE) ? "white" : (
                         (value == Main.DARK) ? "dark" : "truce"));
@@ -384,12 +386,14 @@ public class BoardState implements Runnable{
                 }
                 int value;
                 if (moves == null)
-                    value = scores[Main.DARK] - scores[Main.WHITE];
-                else
+                    value = scores[turn] - scores[1 - turn];
+                else if (turn == Main.DARK)
                     value = moves.get(0).getScore();
+                else
+                    value = -moves.get(0).getScore();
 
                 for (int i = scores[Main.WHITE] + scores[Main.DARK] - 1; i < Main.MAX; i++)
-                    minimaxDict[i] = new HashMap<>();
+                    minimaxDict[i] = new FourLayeredHashMap();
 
                 instance.setValue((Attribute) attributes.elementAt(attributes.size() - 1), value);
             }
@@ -405,11 +409,11 @@ public class BoardState implements Runnable{
      * @param result
      * @return
      */
-    private byte returnResult(StateCode curr, int level, byte result) {
+    private byte returnResult(int[] curr, int level, byte result) {
         Main.levCount[level - 1] += 1;
         Main.lastTimeUpdated[level - 1] = Main.count;
         if (level <= coincLevel) {
-            coincDict[level - 1].put(curr, result);
+            coincDict[level - 1].putIfAbsent(curr, result);
             inTheDict += 1;
             if ((level <= MULTIPROCESSING_LEVEL) && (inTheDict > DICT_MAX_SIZE)) {
                 System.out.println("coincLevel reduced to " + (coincLevel - 1));
@@ -423,7 +427,7 @@ public class BoardState implements Runnable{
             int i = level - 1;
             while (MINIMAX[i] != 0) {
                 //TODO: What should be the initial capacity?
-                minimaxDict[i] = new HashMap<>();
+                minimaxDict[i] = new FourLayeredHashMap();
                 i += 1;
             }
         }
@@ -464,6 +468,8 @@ public class BoardState implements Runnable{
                 currMinimax.add(wekaRepresentation);
                 try {
                     minimaxScore = (byte) Math.round(classifier.classifyInstance(wekaRepresentation));
+                    if (turn == Main.WHITE)
+                        minimaxScore = (byte) -minimaxScore;
                 } catch (Exception ex) {
                     System.out.print("Problem here");
                 }
@@ -482,7 +488,7 @@ public class BoardState implements Runnable{
 
         for (BoardState move:moves) {
             byte currScore;
-            StateCode tmp = move.getCode();
+            int[] tmp = move.getCode();
             //TODO check how many layers deep to go
             Byte dictEntry = null;
             if (level <= depthInDict)
@@ -494,7 +500,7 @@ public class BoardState implements Runnable{
                 move.minimax(maxDepth, minimaxScore, (byte) 0, false, depthInDict, classifier);
                 currScore = move.getScore();
                 if (level <= depthInDict)
-                    minimaxDict[level - 2].put(tmp, currScore);
+                    minimaxDict[level - 2].putIfAbsent(tmp, currScore);
             }
 
             if ((minimaxScore == null) || ((turn == Main.WHITE) &&
@@ -637,7 +643,7 @@ public class BoardState implements Runnable{
             }
             result += "\n";
         }
-        return result + (getCode()).toString() + "\n";
+        return result + Arrays.toString((getCode())) + "\n";
     }
 
 
@@ -698,10 +704,6 @@ public class BoardState implements Runnable{
                 fixed[r1][c1] == (1 - color) && fixed[r2][c2] == (1 - color)));
     }
 
-    /*private long getCode() {
-        return getCode(true);
-    }*/
-
     /**
      * Get the "code" of the board. The code is such that each reflection or
      * rotation of the same board (but not any other board) has the same code.
@@ -715,14 +717,12 @@ public class BoardState implements Runnable{
      *
      * @return the code (a long, maybe a 128bit integer)
      */
-    //private long getCode(boolean printIt) {
-    private StateCode getCode() {
-        //TODO is short enough for 8x8 board. Sign left shift
+    private int[] getCode() {
         ArrayList<Byte> its = new ArrayList<>();
         ArrayList<Byte> old_its;
         for (byte i = 0; i < ITERATORS.length; i++)
             its.add(i);
-        StateCode code = new StateCode(turn);
+        int[] code = new int[4];
         for (int i = 0; i < Main.MAX; i++) {
             byte max = -1;
             old_its = its;
@@ -735,8 +735,9 @@ public class BoardState implements Runnable{
                 if (board[coords[0]][coords[1]] == max)
                     its.add(old_its.get(j));
             }
-            code.rows[i / Main.MAX_IND] = (short) ((code.rows[i / Main.MAX_IND] + max) * 3);
+            code[i % 4] = (code[i % 4] + max) * 3;
         }
+        code[3] += turn;
         return code;
     }
 

@@ -20,7 +20,7 @@ public class Predictor {
     public static final String HIDDEN_LAYERS = "a";
     public static final int VALIDATION_SIZE = 11;
     public static final int VALIDATION_THRESHOLD = 3;
-    public static final boolean DECAY = false;
+    public static final boolean DECAY = true;
     public static final String DEFAULT_TRAINING = "data_level_25";
     public static final String DEFAULT_TESTING = "data_level_25_test";
 
@@ -32,21 +32,21 @@ public class Predictor {
         Instances training_set, testing_set;
 
         /* classifier = getClassifier(DEFAULT_TRAINING, DEFAULT_TESTING);
-        training_set = state.getInstances((byte) 20, 4500, "data_level_20", 25, classifier);
-        testing_set = state.getInstances((byte) 20, 1000, "data_level_20_test", 25, classifier);
-        saveInstances(training_set, "data_level_20");
-        saveInstances(testing_set, "data_level_20_test");
+        training_set = state.getInstances((byte) 18, 900, "data_level_18", 25, classifier);
+        testing_set = state.getInstances((byte) 18, 100, "data_level_18_test", 25, classifier);
+        saveInstances(training_set, "data_level_18");
+        saveInstances(testing_set, "data_level_18_test");
         Classifier classifier1 = train(LEARNING_RATE, HIDDEN_LAYERS, VALIDATION_SIZE, VALIDATION_THRESHOLD, DECAY, MOMENTUM, training_set);
         test(classifier1, testing_set); */
 
 
         // perform the grid search
-        double[] learningRates = {.01, .1, 1, 0.5, 0.2};
-        String[] hiddenLayers = {"a", "i", "i,a", "a,a"};
+        double[] learningRates = {0.1};
+        String[] hiddenLayers = {"a"};
         int[] validationSizes = {11};
-        int[] validationThresholds = {1, 5, 10};
-        boolean[] decays = {false, true};
-        double[] momenta = {0.1, 0.2, 0.8};
+        int[] validationThresholds = {3};
+        boolean[] decays = {false};
+        double[] momenta = {0.2};
 
         training_set = loadInstances(DEFAULT_TRAINING);
         testing_set = loadInstances(DEFAULT_TESTING);
@@ -168,6 +168,8 @@ public class Predictor {
     }
 
     public static double fScore(int tp, int fp, int fn) {
+        if (tp == 0)
+            return 0;
         double precision = (double) (tp) / (tp + fp);
         double recall = (double) (tp) / (tp + fn);
         return 2 * (recall * precision) / (recall + precision);

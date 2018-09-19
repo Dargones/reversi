@@ -48,6 +48,7 @@ public class Main {
     }
 
     public static void main(String args[]) {
+        System.out.println("Current time: " + timeStart);
         Classifier classifier20 = Predictor.getClassifier("data_level_20", "data_level_20_test");
         System.out.println("Classifier-20 loaded");
         Classifier classifier18 = Predictor.getClassifier("data_level_18", "data_level_18_test");
