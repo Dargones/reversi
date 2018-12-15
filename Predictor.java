@@ -20,25 +20,34 @@ public class Predictor {
     public static final String HIDDEN_LAYERS = "a";
     public static final int VALIDATION_SIZE = 11;
     public static final int VALIDATION_THRESHOLD = 3;
-    public static final boolean DECAY = true;
-    public static final String DEFAULT_TRAINING = "data_level_25";
-    public static final String DEFAULT_TESTING = "data_level_25_test";
+    public static final boolean DECAY = false;
+    public static final int MAX_LEVEL = 57;
 
+    public static long timeStart = System.currentTimeMillis();
+    private static Classifier[] classifiers = new Classifier[Main.MAX];
+
+    static {
+        Arrays.fill(classifiers, null);
+    }
+
+
+    public static Classifier getClassifier(int level) {
+        if (level > MAX_LEVEL)
+            return null;
+        if (classifiers[level] == null) {
+            classifiers[level] = createClassifier("data_level_" + level, "data_level_" + level + "_test");
+            System.out.println("Classifier_" + level + " created");
+        }
+        return classifiers[level];
+    }
 
     public static void main(String args[]) {
+        createNewDataset(15, 22, 500);
+    }
 
-        BoardState state = new BoardState();
+    public static void gridSearch(int level) {
         Classifier classifier;
         Instances training_set, testing_set;
-
-        /* classifier = getClassifier(DEFAULT_TRAINING, DEFAULT_TESTING);
-        training_set = state.getInstances((byte) 18, 900, "data_level_18", 25, classifier);
-        testing_set = state.getInstances((byte) 18, 100, "data_level_18_test", 25, classifier);
-        saveInstances(training_set, "data_level_18");
-        saveInstances(testing_set, "data_level_18_test");
-        Classifier classifier1 = train(LEARNING_RATE, HIDDEN_LAYERS, VALIDATION_SIZE, VALIDATION_THRESHOLD, DECAY, MOMENTUM, training_set);
-        test(classifier1, testing_set); */
-
 
         // perform the grid search
         double[] learningRates = {0.1};
@@ -48,14 +57,8 @@ public class Predictor {
         boolean[] decays = {false};
         double[] momenta = {0.2};
 
-        training_set = loadInstances(DEFAULT_TRAINING);
-        testing_set = loadInstances(DEFAULT_TESTING);
-        if ((training_set == null) || (testing_set == null)) {
-            training_set = state.getInstances((byte) 25, 900, DEFAULT_TRAINING, Main.MAX + 1, null);
-            testing_set = state.getInstances((byte) 25, 100, DEFAULT_TESTING, Main.MAX + 1, null);
-            saveInstances(training_set, DEFAULT_TRAINING);
-            saveInstances(testing_set, DEFAULT_TESTING);
-        }
+        training_set = loadInstances("data_level_" + level);
+        testing_set = loadInstances("data_level_" + level + "_test");
 
         System.out.println("Instances loaded");
 
@@ -85,12 +88,31 @@ public class Predictor {
 
     }
 
-    public static Classifier getClassifier(String file1, String file2) {
+    public static void createNewDataset(int level, int evaluationLevel, int size) {
+        System.out.println(level);
+        BoardState state = new BoardState();
+        Classifier classifier = null;
+        Instances training_set, testing_set;
+        System.out.println("Program launched");
+        if (evaluationLevel != Main.MAX + 1) {
+            classifier = createClassifier("data_level_" + evaluationLevel, "data_level_" + evaluationLevel + "_test");
+            System.out.println("Model trained");
+        }
+        timeStart = System.currentTimeMillis();
+        training_set = state.getInstances((byte) level, size / 10 * 9, "data_level_" + level, evaluationLevel, classifier);
+        timeStart = System.currentTimeMillis();
+        testing_set = state.getInstances((byte) level, size / 10, "data_level_" + level +"_test", evaluationLevel, classifier);
+        saveInstances(training_set, "data_level_" + level);
+        saveInstances(testing_set, "data_level_" + level + "_test");
+        Classifier classifier1 = train(LEARNING_RATE, HIDDEN_LAYERS, VALIDATION_SIZE, VALIDATION_THRESHOLD, DECAY, MOMENTUM, training_set);
+        test(classifier1, testing_set);
+    }
+
+    public static Classifier createClassifier(String file1, String file2) {
         Instances set = loadInstances(file1);
         Instances additional = loadInstances(file2);
-        for (int i = 0; i < additional.numInstances(); i++) {
+        for (int i = 0; i < additional.numInstances(); i++)
             set.add(additional.instance(i));
-        }
         return train(LEARNING_RATE, HIDDEN_LAYERS, VALIDATION_SIZE, VALIDATION_THRESHOLD, DECAY, MOMENTUM, set);
     }
 
@@ -105,6 +127,7 @@ public class Predictor {
         classifier.setLearningRate(learningRate);
         classifier.setHiddenLayers(hiddenLayers);
         classifier.setMomentum(momentum);
+        System.out.println("Model built");
         try {
             classifier.buildClassifier(training_set);
         } catch (Exception ex) {

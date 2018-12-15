@@ -12,7 +12,7 @@ public class Main {
     public static final byte WHITE = 0;
     public static final byte DARK = 1;
     public static final byte TRUCE = 2; // can also mean "unoccupied"
-    public static final byte MAX_IND = 6; // the dimension of the board.
+    public static final byte MAX_IND = 8; // the dimension of the board.
     // The goal is to solve the puzzle for MAX_IND = 8
     public static final byte MAX = MAX_IND * MAX_IND;
     // total number of tiles on the board
@@ -48,17 +48,6 @@ public class Main {
     }
 
     public static void main(String args[]) {
-        System.out.println("Current time: " + timeStart);
-        Classifier classifier20 = Predictor.getClassifier("data_level_20", "data_level_20_test");
-        System.out.println("Classifier-20 loaded");
-        Classifier classifier18 = Predictor.getClassifier("data_level_18", "data_level_18_test");
-        System.out.println("Classifier-18 loaded");
-        for (int i = MAX - 1; i >= 0; i--)
-            BoardState.MINIMAX_CLASS[i] = null;
-        for (int i = 19; i >= 0; i--)
-            BoardState.MINIMAX_CLASS[i] = classifier20;
-        for (int i = 17; i >= 0; i--)
-            BoardState.MINIMAX_CLASS[i] = classifier18;
         BoardState state = new BoardState();
         //TODO: find an alternative for cProfile
         byte winner = state.analyze();
@@ -101,12 +90,14 @@ public class Main {
         printArray("Current BFs: ", currBF, 1);
         if (min_level_reached == INIT) {
             try {
-                FileOutputStream fileOut =
-                        new FileOutputStream("hashtable.ser");
-                ObjectOutputStream out = new ObjectOutputStream(fileOut);
-                out.writeObject(BoardState.coincDict);
-                out.close();
-                fileOut.close();
+                for (int level = 3; level < BoardState.coincLevel; level++) {
+                    FileOutputStream fileOut =
+                            new FileOutputStream("hashtable" + level + ".ser");
+                    ObjectOutputStream out = new ObjectOutputStream(fileOut);
+                    out.writeObject(BoardState.coincDict[level]);
+                    out.close();
+                    fileOut.close();
+                }
             } catch (Exception i) {
                 i.printStackTrace();
             }
@@ -152,7 +143,7 @@ public class Main {
         }*/
     }
 
-    private static String getDuration(long milisec) {
+    public static String getDuration(long milisec) {
         long total = milisec / 1000;
         long sec = total % 60;
         total = total / 60;

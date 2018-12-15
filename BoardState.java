@@ -23,22 +23,23 @@ public class BoardState implements Runnable{
     private static final byte[][] DIRS = {{0, 1}, {1, 1}, {1, 0}, {1, -1},
             {0, -1}, {-1, -1}, {-1, 0}, {-1, 1}};
     // the 8 directions in which one can go from a tile.
-    private static final byte TRACE_LEVEL = 14; //The level from which to begin
+    private static final byte TRACE_LEVEL = 40; //The level from which to begin
     // to trace the states of the board and print them. Level is the number of
     // disks already on the board
-    private static final byte MINIMAX_LEVELS_TO_STORE = 8;
+    private static final byte MINIMAX_LEVELS_TO_STORE = 9;
     // number of minimax level calculations that should be kept intact (these
     // will not be recalculated but will take up space)
-    private static final byte[] MINIMAX = {0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0,
-            7, 0, 0, 0, 0, 0, 0, 5, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-            0, 0};
+    /* private static final byte[] MINIMAX = {0, 0, 0, 0, 13, 0, 0, 0, 0, 0, 0, 0,
+            7, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
+            0, 0}; */
+    private static final byte[] MINIMAX = {0, 0, 0, 0, 10, 0, 10, 0, 0, 0, 0, 10, 0, 10, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 0,
+        0, 8, 0, 0, 0, 0, 0, 0, 10, 0, 0, 0, 0, 0, 0, 8, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
     // Levels at which to use minimax and how deep the minimax calculations
     // should dive. Note that the actual calculations are made at the levels at
     // which the value of the array increases
-    public static Classifier[] MINIMAX_CLASS = new Classifier[Main.MAX];
-    private static final byte MULTIPROCESSING_LEVEL = 22;
+    private static final byte MULTIPROCESSING_LEVEL = 52;
     // IMPORTANT: Multiprocessing level should be below the first MINIMAX level
-    private static final int REPORT_FQ = (int) Math.pow(2, 23);
+    private static final int REPORT_FQ = (int) Math.pow(2, 20);
     // frequency of the report. Report is printed then count % REPORT_FQ == 0
     private static final Transformation[] TRANSFORMS = {
             (x, y) -> new byte[]{(byte) (MIMO - x), y}, (x, y) -> new byte[]{y, x},
@@ -52,7 +53,7 @@ public class BoardState implements Runnable{
     private static final long DICT_MAX_SIZE = 10000000;
     private static final int MAX_MINIMAX_INSTANCES = 50000;
 
-    private static byte coincLevel = Main.MAX - 2;
+    public static byte coincLevel = Main.MAX - 4;
     // The level from which to begin to look up the state inside the coincDict
     // this level can change depending on how much memory the program has
     public static FourLayeredHashMap[] coincDict = new FourLayeredHashMap[Main.MAX];
@@ -234,7 +235,8 @@ public class BoardState implements Runnable{
 
         ArrayList<BoardState> moves;
         if (MINIMAX[level - 1] != 0) {
-            moves = minimax((byte) (MINIMAX[level - 1] + level), null, (byte) 0, true, (byte) (level + MINIMAX_LEVELS_TO_STORE), MINIMAX_CLASS[level - 1]);
+            Classifier classifier = Predictor.getClassifier(MINIMAX[level - 1] + level);
+            moves = minimax((byte) (MINIMAX[level - 1] + level), null, (byte) 0, true, (byte) (level + MINIMAX_LEVELS_TO_STORE), classifier);
         } else
             moves = getMoves(true);
 
@@ -311,8 +313,11 @@ public class BoardState implements Runnable{
         Random random = new Random();
         int i = 0;
         while (i < count) {
-            if (i % 100 == 0)
-                System.out.println((count - i) + " states left");
+            if (i % 10 == 0) {
+                //System.out.println((count - i) + " states left");
+                long timeLeft = (long) ((double) (System.currentTimeMillis() - Predictor.timeStart) / i * (count - i));
+                System.out.println("Time left:" + Main.getDuration(timeLeft));
+            }
             int currLevel = scores[Main.WHITE] + scores[Main.DARK];
             BoardState currState = this;
             boolean turnFlipped = false;
@@ -378,7 +383,7 @@ public class BoardState implements Runnable{
                 instance.setValue((Attribute) attributes.elementAt(attributes.size() - 1), value);
             } else {
                 ArrayList<BoardState> moves = minimax((byte) (evaluationLevel), null, (byte) 0, true,
-                        (byte) evaluationLevel, classifier);
+                        (byte) (evaluationLevel - 1), classifier);
                 if (moves == null) {
                     turn = (byte) (1 - turn);
                     moves = minimax((byte) (evaluationLevel), null, (byte) 0, true,
