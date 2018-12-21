@@ -12,28 +12,23 @@ public class Main {
     public static final byte WHITE = 0;
     public static final byte DARK = 1;
     public static final byte TRUCE = 2; // can also mean "unoccupied"
-    public static final byte MAX_IND = 8; // the dimension of the board.
-    // The goal is to solve the puzzle for MAX_IND = 8
+    public static final byte MAX_IND = 6; // the dimension of the board.
+    // The ultimate goal is to solve the puzzle for MAX_IND = 8
     public static final byte MAX = MAX_IND * MAX_IND;
     // total number of tiles on the board
     public static final byte INIT = 4;
-    // initial positions filled
-    /* public static final double[] EXP_BF = {0, 0, 0, 1.0, 1.0, 1.33, 3.25, 1.15,
-            4.67, 1.03, 4.54, 1.18, 4.12, 1.25, 4.21, 1.45, 0.0, 0, 0, 0, 0, 0,
-            0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0}; */
-    // experimentally obtained branching factors for lower levels - these can be
-    // used to predict the time remaining to solve the problem. 0 means that
-    // there is no experimentally obtained value
-
+    // total number of initial positions filled
     public static long count = 0; // number of different states considered while
     // traversing the game. The count does not include the final states
     public static Long[] levCount = new Long[MAX];
     // stores the total number of different states considered at each level
+    // Level is the number of disks already on the board
     public static long[] lastTimeUpdated = new long[Main.MAX];
-    // the value of count at the last time this level was calculated
+    // the value of count at the last time a boardstate at this level was calculated
     public static Long[] coincCount = new Long[MAX];
     // stores the number of times the coincDict was used. Either levCount or
-    // coincCount can be updated at each pass, but never both
+    // coincCount can be updated at each pass, but never both. This array is used to assess the
+    // benefit of using a dictionary to store previously evaluated states
     public static Long[] currBF = new Long[MAX];
     // current branching factors
     public static long timeStart = System.currentTimeMillis();
@@ -47,21 +42,25 @@ public class Main {
         }
     }
 
+    /**
+     * Run t heprogram and find the winner
+     * @param args
+     */
     public static void main(String args[]) {
         BoardState state = new BoardState();
-        //TODO: find an alternative for cProfile
         byte winner = state.analyze();
         if (winner == DARK)
-            System.out.println("Dark wins");
+            System.out.println("Dark wins!");
         else if (winner == WHITE)
-            System.out.println("White wins");
+            System.out.println("White wins!");
         else
-            System.out.println("Truce");
+            System.out.println("Truce!");
         printReport();
     }
 
     /**
-     * Print report about the current progress
+     * Print report about the current progress. Current "time left" prediction works extremely
+     * poorly
      */
     public static void printReport() {
         System.out.println("# of different states analyzed: " + sum(levCount));
@@ -81,7 +80,7 @@ public class Main {
         System.out.println("Min level reached: " + min_level_reached);
 
         double acceleration = 1;
-        // how much faster the program is thanks to transforms
+        // how much faster the program is thanks to taking into account syjmetries and reflections
         for (byte i = INIT; i < MAX; i++)
             if (levCount[i] != 0)
                 acceleration *= (double) (levCount[i] + coincCount[i]) / levCount[i];
@@ -89,6 +88,7 @@ public class Main {
 
         printArray("Current BFs: ", currBF, 1);
         if (min_level_reached == INIT) {
+            // if this is the last time the function is called, save teh coincDict
             try {
                 for (int level = 3; level < BoardState.coincLevel; level++) {
                     FileOutputStream fileOut =
@@ -121,9 +121,6 @@ public class Main {
         // totalMod ties the states left (before next level) and the total
         // expected number of states
         for (int i = min_level_reached - 3; i > 2; i--) {
-            //if (EXP_BF[i] != 0)
-            // totalMod *= EXP_BF[i];
-            // else
             totalMod *= currBF[i];
         }
         long currTime = System.currentTimeMillis();
@@ -136,13 +133,13 @@ public class Main {
         System.out.println("Time left total: " + getDuration((long) (timeLeft * totalMod)));
         System.out.println("Current time: " + currTime);
         System.out.println("\n");
-        /* try {
-            Thread.sleep(20000);
-        } catch (InterruptedException e) {
-            e.printStackTrace();
-        }*/
     }
 
+    /**
+     * Convert miliseconds to a human-readable String representing time
+     * @param milisec
+     * @return
+     */
     public static String getDuration(long milisec) {
         long total = milisec / 1000;
         long sec = total % 60;
