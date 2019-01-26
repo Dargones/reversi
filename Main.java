@@ -1,21 +1,19 @@
 package reversi;
 
-import weka.classifiers.Classifier;
+import org.apache.log4j.Logger;
 
 import java.io.FileOutputStream;
 import java.io.ObjectOutputStream;
+import static reversi.BoardState.*;
+import static reversi.Disk.*;
 
 /**
+ * This classes processes the command arguments, launches the analysis and keeps the log, i.e.
+ * nothing interesting is happenning here
  * Created by alexanderfedchin on 8/30/18.
  */
 public class Main {
-    public static final byte WHITE = 0;
-    public static final byte DARK = 1;
-    public static final byte TRUCE = 2; // can also mean "unoccupied"
-    public static final byte MAX_IND = 6; // the dimension of the board.
-    // The ultimate goal is to solve the puzzle for MAX_IND = 8
-    public static final byte MAX = MAX_IND * MAX_IND;
-    // total number of tiles on the board
+    private final static Logger logger = Logger.getLogger(StateAnalyzer.class);
     public static final byte INIT = 4;
     // total number of initial positions filled
     public static long count = 0; // number of different states considered while
@@ -23,8 +21,8 @@ public class Main {
     public static Long[] levCount = new Long[MAX];
     // stores the total number of different states considered at each level
     // Level is the number of disks already on the board
-    public static long[] lastTimeUpdated = new long[Main.MAX];
-    // the value of count at the last time a boardstate at this level was calculated
+    public static long[] lastTimeUpdated = new long[MAX];
+    // the value of count at the last time a boardState at this level was calculated
     public static Long[] coincCount = new Long[MAX];
     // stores the number of times the coincDict was used. Either levCount or
     // coincCount can be updated at each pass, but never both. This array is used to assess the
@@ -43,28 +41,30 @@ public class Main {
     }
 
     /**
-     * Run t heprogram and find the winner
+     * Run the program and find the winner
      * @param args
      */
     public static void main(String args[]) {
+        logger.info("Program launched");
         BoardState state = new BoardState();
-        byte winner = state.analyze();
+        StateAnalyzer analyzer = new StateAnalyzer(state);
+        Disk winner = analyzer.analyze();
         if (winner == DARK)
             System.out.println("Dark wins!");
         else if (winner == WHITE)
             System.out.println("White wins!");
         else
             System.out.println("Truce!");
-        printReport();
+        updateLog();
     }
 
     /**
      * Print report about the current progress. Current "time left" prediction works extremely
      * poorly
      */
-    public static void printReport() {
-        System.out.println("# of different states analyzed: " + sum(levCount));
-        System.out.println("# of states reused: " + sum(coincCount));
+    public static void updateLog() {
+        logger.info("# of different states analyzed: " + sum(levCount));
+        logger.info("# of states reused: " + sum(coincCount));
         Double[] bfs = new Double[MAX - INIT]; // branching factors
         byte min_level_reached = 0;
         for (byte i = INIT; i < MAX; i++) {
@@ -76,63 +76,34 @@ public class Main {
                 bfs[i - INIT] = ((double) levCount[i] / levCount[i - 1]);
             }
         }
-        printArray("Branching factors: ", bfs, INIT);
-        System.out.println("Min level reached: " + min_level_reached);
+        logArray("Branching factors: ", bfs, INIT);
+        logger.info("Min level reached: " + min_level_reached);
 
         double acceleration = 1;
         // how much faster the program is thanks to taking into account syjmetries and reflections
         for (byte i = INIT; i < MAX; i++)
             if (levCount[i] != 0)
                 acceleration *= (double) (levCount[i] + coincCount[i]) / levCount[i];
-        System.out.println("Acceleration: " + acceleration);
+        System.out.println("Acceleration due to reflection/rotation handling: " + acceleration);
 
-        printArray("Current BFs: ", currBF, 1);
+        logArray("Current BFs: ", currBF, 1);
         if (min_level_reached == INIT) {
-            // if this is the last time the function is called, save teh coincDict
+            // if this is the last time the function is called, save the coincDict
             try {
-                for (int level = 3; level < BoardState.coincLevel; level++) {
+                for (int level = 3; level < StateAnalyzer.coincLevel; level++) {
                     FileOutputStream fileOut =
-                            new FileOutputStream("hashtable" + level + ".ser");
+                            new FileOutputStream("BoardStates_level_" + level + ".ser");
                     ObjectOutputStream out = new ObjectOutputStream(fileOut);
-                    out.writeObject(BoardState.coincDict[level]);
+                    out.writeObject(StateAnalyzer.coincDict[level]);
                     out.close();
                     fileOut.close();
                 }
             } catch (Exception i) {
-                i.printStackTrace();
+                logger.warn("Could not save the hashtables to the disk.");
             }
             return;
         }
-
-        Long statesLeft = 0L;
-        // states left to analyze before next level is reached
-        boolean non_zero_found = false;
-        // whether the first non-zero element of currBF was reached
-        for (int i = MAX - 2; i >= min_level_reached - 3; i--) {
-            double curr = currBF[i];
-            if (non_zero_found)
-                curr -= 1;
-            if (curr != 0)
-                non_zero_found = true;
-            curr *= (double) lastTimeUpdated[i + 1] / levCount[i + 1] * ((double) sum(levCount) / count);
-            statesLeft += (long) curr;
-        }
-        double totalMod = (double) (statesLeft + sum(levCount)) / statesLeft;
-        // totalMod ties the states left (before next level) and the total
-        // expected number of states
-        for (int i = min_level_reached - 3; i > 2; i--) {
-            totalMod *= currBF[i];
-        }
-        long currTime = System.currentTimeMillis();
-        long timeLeft = (long) ((double) (currTime - timeStart) / sum(levCount) * statesLeft);
-
-        System.out.println(statesLeft + " states left before next level");
-        System.out.println(((Double)(totalMod * statesLeft)).longValue() +
-                " states left total");
-        System.out.println("Time left before next level: " + getDuration(timeLeft));
-        System.out.println("Time left total: " + getDuration((long) (timeLeft * totalMod)));
-        System.out.println("Current time: " + currTime);
-        System.out.println("\n");
+        //TODO: Adequate remaining time prediction
     }
 
     /**
@@ -184,7 +155,7 @@ public class Main {
      * @param beginID
      * @return
      */
-    private static void printArray(String prompt, Number[] array, int beginID) {
+    private static void logArray(String prompt, Number[] array, int beginID) {
         String indexLine = prompt;
         String arrayLine = "";
         for (int i = 0; i < prompt.length(); i++)
@@ -197,7 +168,7 @@ public class Main {
                 tmp += " ";
             indexLine += tmp;
         }
-        System.out.println(indexLine);
-        System.out.println(arrayLine);
+        logger.info(indexLine);
+        logger.info(arrayLine);
     }
 }
