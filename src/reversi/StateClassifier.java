@@ -22,6 +22,10 @@ import java.util.Arrays;
 public class StateClassifier {
 
     private static final Logger logger = Logger.getLogger(reversi.StateClassifier.class);
+    private static final String DATASETS_DIR = "dataSets/";
+    // directory in which to store the datasets
+    private static final String MODELS_DIR = "models/";
+    // directory in which to store the models
     private static final byte[] MINIMAX_EVALUATORS = {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0, 0, 0, 0, 25, 0, 25, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
             0, 0};
@@ -131,7 +135,8 @@ public class StateClassifier {
         StateClassifier classifier;
         logger.info("Attempting to load a pretrained model for level " + level);
         try {
-            classifier = new StateClassifier((Classifier) SerializationHelper.read("Model_level_" + level + ".ser"));
+            classifier = new StateClassifier((Classifier) SerializationHelper.read(
+                    MODELS_DIR + "Model_level_" + level + ".ser"));
             logger.info("Model loaded");
             classifiers[level - 1] = classifier;
             return classifiers[level - 1];
@@ -143,7 +148,8 @@ public class StateClassifier {
             logger.info("Model trained. Saving the model");
         }
         try {
-            SerializationHelper.write("Model_level_" + level + ".ser", classifier.classifier);
+            SerializationHelper.write(
+                    MODELS_DIR + "Model_level_" + level + ".ser", classifier.classifier);
         } catch (Exception e2) {
             logger.warn("Model could not be saved");
         }
@@ -160,7 +166,7 @@ public class StateClassifier {
     public static Instances getDataset(int level) {
         SerializedInstancesLoader loader = new SerializedInstancesLoader();
         try {
-            loader.setFile(new File("Data_level_" + level + ".ser"));
+            loader.setFile(new File(DATASETS_DIR + "Data_level_" + level + ".ser"));
             return loader.getDataSet();
         } catch (IOException e) {
             logger.info("Loading failed. Creating a new dataset with default configurations");
@@ -186,7 +192,7 @@ public class StateClassifier {
         for (int i = 0; i < rawData.instances.length; i++)
             dataSet.add(createInstance(rawData.instances[i], rawData.labels[i]));
         dataSet.setClassIndex(MAX);
-        saveDataSet(dataSet, "Data_level_" + level + ".ser");
+        saveDataSet(dataSet, DATASETS_DIR + "Data_level_" + level + ".ser");
         return dataSet;
     }
 

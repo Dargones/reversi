@@ -28,7 +28,7 @@ public class StateAnalyzer implements Runnable {
     // Levels at which to use minimax and how deep (in levels) the minimax calculations should be.
     private static final byte MULTITHREADING_LEVEL = 22;
     // Level from which to start taking advantage of multithreading
-    private static final int LOG_FQ = (int) Math.pow(2, 25);
+    private static final int LOG_FQ = (int) Math.pow(2, 26);
     // frequency of the report. Report is printed then count % REPORT_FQ == 0
     private static final long DICT_MAX_SIZE = Runtime.getRuntime().maxMemory() / MAX / 16;
     // maximum total number of states that the program will attempt to store in the dictionary.
