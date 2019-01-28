@@ -2,7 +2,7 @@
 The code in this repository allows to analyze the [Reversi (aka. Othello)](https://en.wikipedia.org/wiki/Reversi) 
 board game, which is a perfect information, zero-sum, two-player strategy game played on an 8x8 board. 
 The ultimate goal of this project is to find a winner in a perfectly played game (the number of possible positions 
-in Reversi is estimated to be close to, though somewhat higher than that that in Checkers). 
+in Reversi is estimated to be close to, though somewhat higher than that in Checkers). 
 
 ## The algorithm 
 
